@@ -1,0 +1,2 @@
+# ## Zabbix Server Checker.
+*/10 * * * * root /opt/zabbix/checker/zbxserverchecker.sh >/dev/null 2>&1
