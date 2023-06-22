@@ -40,6 +40,7 @@ scriptLocation='/opt/zabbix'
 declare -r urlDeploy='hub.cybionet.online'
 #"https://github.com/cybiohub/svc_zabbixagent/archive/refs/heads/master.zip"
 
+
 #############################################################################################
 # ## VARIABLES
 
@@ -78,7 +79,7 @@ declare -r urlLAMP
 
 # ## Check if the script is configured.
 if [ "${isConfigured}" == 'false' ] ; then
-  echo -n -e '\e[38;5;208mWARNING: Customize the settings to match your environment. Then set the "isConfigured" variable to "true".\n\e[0m'    
+  echo -n -e '\e[38;5;208mWARNING: Customize the parameters of this installation script according to your environment. Then set the "isConfigured" variable to "true".\n\e[0m'   
   exit 0
 fi
 
