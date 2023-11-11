@@ -1,3 +1,9 @@
-v0.1.14 - 2022-08-27
+v0.1.15 - 2023-11-11
+## Fixed
+  - Zabbix repo... but it still the wrong method.
+  - MySQL instruction.
+
+v0.1.14 - 2020-14-11
 ## Added
   - First commit.
+  - Add Zabbix Server checker.

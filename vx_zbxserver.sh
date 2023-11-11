@@ -5,12 +5,12 @@
 # * Author:           	(c) 2004-2023  Cybionet - Ugly Codes Division
 # *
 # * File:               vx_zbxserver.sh
-# * Version:            0.1.14
+# * Version:            0.1.15
 # *
 # * Description:        Zabbix Server LTS installation script under Ubuntu LTS Server.
 # *
 # * Creation: October 03, 2014
-# * Change:   August 27, 2022
+# * Change:   November 11, 2023
 # *
 # ****************************************************************************
 
@@ -36,10 +36,6 @@ zbxVers='6.0'
 # ## Local scripts location (Without the trailing slash).
 scriptLocation='/opt/zabbix'
 
-# ## Deployment URL.
-declare -r urlDeploy='hub.cybionet.online'
-#"https://github.com/cybiohub/svc_zabbixagent/archive/refs/heads/master.zip"
-
 
 #############################################################################################
 # ## VARIABLES
@@ -48,9 +44,8 @@ declare -r isConfigured
 declare -ir installDefault
 declare -r zbxVers
 declare -r scriptLocation
-declare -r urlDeploy
 
-# ## Distribution: ubuntu, debian, raspian.
+# ## Distribution: ubuntu, debian, raspbian.
 osDist=$(lsb_release -i | awk '{print $3}')
 declare -r osDist
 
@@ -65,11 +60,11 @@ declare -r osVers
 phpVers=$(apt-cache policy php | grep Candidate | awk -F ":" '{print $3}' | awk -F "+" '{print $1}')
 declare -r phpVers
 
-# ## Zabbix Agent installation script URL.
+# ## Zabbix Agent installation script URL (unused).
 urlZbxAgent='https://github.com/cybiohub/svc_zabbixagent/archive/refs/heads/master.zip'
 declare -r urlZbxAgent
 
-# ## LAMP installation script URL.
+# ## LAMP installation script URL (unused).
 urlLAMP='https://github.com/cybiohub/svc_lamp/archive/refs/heads/master.zip'
 declare -r urlLAMP
 
@@ -79,7 +74,7 @@ declare -r urlLAMP
 
 # ## Check if the script is configured.
 if [ "${isConfigured}" == 'false' ] ; then
-  echo -n -e '\e[38;5;208mWARNING: Customize the parameters of this installation script according to your environment. Then set the "isConfigured" variable to "true".\n\e[0m'   
+  echo -n -e '\e[38;5;208mWARNING: Customize the settings to match your environment. Then set the "isConfigured" variable to "true".\n\e[0m'    
   exit 0
 fi
 
@@ -90,7 +85,7 @@ if [ "${EUID}" -ne 0 ]; then
 fi
 
 # ## Last chance. Ask before execute.
-echo -n -e "\n\n\n\e[38;5;208mWARNING: You must have preinstalled script vx_lamp.sh before running this script.\e[0m"
+echo -n -e "\n\n\n\e[38;5;208mWARNING: You must have preinstalled LAMP server or execute script vx_lamp.sh before running this script.\e[0m"
 echo -n -e "\n\e[38;5;208mWARNING:\e[0m You are preparing to install the Zabbix Server service. Press 'y' to continue, or any other key to exit: "
 read -r ANSWER
 if [ "${ANSWER,,}" != "y" ]; then
@@ -119,6 +114,23 @@ fi
 #############################################################################################
 # ## FUNCTIONS
 
+# ## Added Zabbix repository.
+function zxRepo {
+ if [ ! -f '/etc/apt/sources.list.d/zabbix.list' ]; then
+   echo -e "# ## Zabbix ${zbxVers} Repository" > /etc/apt/sources.list.d/zabbix.list
+   echo -e "deb https://repo.zabbix.com/zabbix/${zbxVers}/${osDist,,}/ ${osVers} main contrib non-free" >> /etc/apt/sources.list.d/zabbix.list
+   echo -e "deb-src https://repo.zabbix.com/zabbix/${zbxVers}/${osDist,,}/ ${osVers} main contrib non-free" >> /etc/apt/sources.list.d/zabbix.list
+
+   # ## Wrong method...
+   apt-key adv --keyserver hkps://keyserver.ubuntu.com --recv-keys 082AB56BA14FE591
+   apt-key export A14FE591 | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/zabbix.gpg
+   apt-get update
+ else
+   echo -e 'INFO: Source file already exist!'
+ fi
+}
+
+# ## 
 function zx_base_check {
  checkPackage apache2
  sapache="${dependency}"
@@ -139,11 +151,16 @@ function zx_base_check {
    fi
 
    cd "${dlPath}" || echo 'ERROR: An unexpected error has occurred.'
-   wget -t 1 -T 5 https://${urlDeploy}/services/apache2/vx_lamp.sh -O vx_lamp.sh
-   chmod 700 "${dlPath}"/vx_lamp.sh
+   wget -t 1 -T 5 https://github.com/cybiohub/svc_lamp/archive/refs/heads/main.zip -O svc_lamp.zip || rm -f svc_lamp.zip
 
-   # ## Warn and exit if LAMP is not installed.
-   #echo -n -e "\n\n\n\e[31;1;208mWARNING: Missing Apache, PHP or MySQL server. Please launch vx_lamp.sh script\e[0m.\n\n"
+   if [ -f svc_lamp.zip ]; then
+     unzip svc_lamp.zip   
+     chmod 500 vx_lamp.sh
+   else
+     echo -e "\e[31;1;208mERROR: svc_lamp.zip not found.\e[0m"
+   fi
+
+   # ## Warning and exit if LAMP is not installed.
    echo -n -e "\n\n\n\e[31;1;208mWARNING: Missing Apache, PHP or MySQL server. Please install these dependancies\e[0m.\n\n"
    exit 0
  fi
@@ -202,20 +219,6 @@ function zx_base {
  apt-get -y install odbc-postgresql tdsodbc libodbc1
 }
 
-# ## Added Zabbix repository.
-function zxRepo {
- if [ ! -f '/etc/apt/sources.list.d/zabbix.list' ]; then
-   echo -e "# ## Zabbix ${zbxVers} Repository" > /etc/apt/sources.list.d/zabbix.list
-   echo -e "deb https://repo.zabbix.com/zabbix/${zbxVers}/${osDist,,}/ ${osVers} main contrib non-free" >> /etc/apt/sources.list.d/zabbix.list
-   echo -e "deb-src https://repo.zabbix.com/zabbix/${zbxVers}/${osDist,,}/ ${osVers} main contrib non-free" >> /etc/apt/sources.list.d/zabbix.list
-
-   apt-key adv --keyserver hkps://keyserver.ubuntu.com --recv-keys 082AB56BA14FE591
-   apt-get update
- else
-   echo -e 'INFO: Source file already exist!'
- fi
-}
-
 # ## Installing the Zabbix Server with MySQL support.
 function zxServer {
  apt-get -y install zabbix-server-mysql
@@ -237,7 +240,6 @@ function zxServerConfig {
 # ## Installing the Zabbix interface.
 function zxFrontend {
  apt-get -y install zabbix-frontend-php
- apt-get -y install ttf-dejavu-core
  apt-get -y install php"${phpVers}"-bcmath php"${phpVers}"-mbstring php"${phpVers}"-gd
 
  if [ -f '/etc/apache2/conf-available/zabbix-frontend-php.conf' ]; then
@@ -319,7 +321,7 @@ function cfg_php {
 zx_base_check
 zx_base
 
-# ## Installation of the dependencies required to Zabbix server under Ubuntu.
+# ## Installation of the dependencies required to Zabbix Server under Ubuntu.
 if [ "${installDefault}" -eq 0 ]; then
   # ## Added Zabbix repository as per setting.
   zxRepo
@@ -335,9 +337,6 @@ zxDir
 # ## Installing frontend for Zabbix.
 zxFrontend
 zx_frontend_tls
-
-# ## Copy of the ready-to-use simplified configuration file.
-zx_server_cfg
 
 # ## Adjusting the PHP configuration.
 cfg_php
@@ -368,7 +367,8 @@ fi
 # AJOUTER UN READ!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 echo -n -e "\n\n\n\e[38;5;208mPlease create database manually.\e[0m\n"
 echo -e "mysql -p -e \"create database zabbix character set utf8 collate utf8_bin;\""
-echo -e "mysql -p -e \"grant all on zabbix.* to 'zabbix'@'localhost' identified by 'SECRETPASSWORD';\""
+echo -e "mysql -p -e \"create user 'zabbix'@'localhost' identified by 'SECRETPASSWORD';\""
+echo -e "mysql -p -e \"grant all on zabbix.* to 'zabbix'@'localhost';\""
 echo -e "exit;\n"
 echo -e "\nPour une version depot Zabbix:\n"
 echo -e "zcat /usr/share/doc/zabbix-server-mysql/create.sql.gz | mysql -u zabbix -p zabbix\n"
@@ -380,6 +380,9 @@ echo -e "\nAccess http://W.X.Y.Z/zabbix/ to finish configuration.\n"
 # ##echo -e "\nCopy configuration file in /usr/share/zabbix/conf/ directory.\n"
 
 echo -e "\n\nDefault information\nUser: Admin \nPassword: zabbix\n"
+
+# ##
+echo -n -e "\n\n\n\e[38;5;208mWARNING:Please configure the file /etc/zabbix/zabbix_server.conf.\n\e[0m"
 
 
 # ## Exit.
