@@ -54,6 +54,7 @@ The `vx_zbxserver.sh` application does not require any additional packages to wo
 	```bash
 	vim /etc/zabbix/zabbix_server.conf
 	```
+ 
 	```
 	# ## Name of the database.
 	DBName=zabbix
@@ -67,11 +68,11 @@ The `vx_zbxserver.sh` application does not require any additional packages to wo
 
 8. Create the MySQL database manually.
 
-       ```bash
+	```bash
 	mysql -p -e "create database zabbix character set utf8 collate utf8_bin;"
 	mysql -p -e "grant all on zabbix.* to 'zabbix'@'localhost' identified by 'SECRETPASSWORD';"
 	exit;
-       ```
+	```
 
 9. Populate Zabbix database.
 
