@@ -1,3 +1,11 @@
+v0.1.16 - 2024-07-12
+## Fixed
+  - Fixed the process of adding the Zabbix repo.
+
+## Added
+  - Now Zabbix 7.x is supported.
+
+
 v0.1.15 - 2023-11-11
 ## Fixed
   - Zabbix repo... but it still the wrong method.

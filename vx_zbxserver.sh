@@ -2,38 +2,42 @@
 #set -x
 # ****************************************************************************
 # *
-# * Author:           	(c) 2004-2023  Cybionet - Ugly Codes Division
+# * Author:           	(c) 2004-2024  Cybionet - Ugly Codes Division
 # *
 # * File:               vx_zbxserver.sh
-# * Version:            0.1.15
+# * Version:            0.1.16
 # *
 # * Description:        Zabbix Server LTS installation script under Ubuntu LTS Server.
 # *
 # * Creation: October 03, 2014
-# * Change:   November 11, 2023
+# * Change:   July 12, 2024
 # *
+# ****************************************************************************
+# * This script deploys the Zabbix server (MySQL) as well as its frontend.
+# * The prerequisites are to have previously installed a LAMP server.
 # ****************************************************************************
 
 
 #############################################################################################
 # ## CUSTOM VARIABLES
 
-# ## Force configuration of the script.
+# ## Set this setting to 'true' after you finish configuring the settings for this installation script.
 # ## Value: enabled (true), disabled (false).
 isConfigured='false'
 
-# ## # ## Choose the repository from which you want to install Zabbix Server (0=Zabbix Repo (recommended), 1=Distribution Repo).
+
+# ## Choose the repository from which you want to install Zabbix Server (0=Zabbix Repo (recommended), 1=Distribution Repo).
 installDefault=0
 
-# ## Zabbix Server version.
-# ## 3.x: 3.0, 3.2, 3.4
-# ## 4.x: 4.0, 4.2, 4.5
+# ## Supported Zabbix Server version.
+# ## 4.x: 4.0, 4.5 (Obsolete)
 # ## 5.x: 5.0, 5.5
-# ## 6.x: 6.0
-# ## 4.0, 5.0 and 6.0 are LTS version.
-zbxVers='6.0'
+# ## 6.x: 6.0, 6.5
+# ## 7.x: 7.0
+# ## 5.0, 6.0 and 7.0 are LTS version.
+zbxVers='7.0'
 
-# ## Local scripts location (Without the trailing slash).
+# ## Location of the directory containing the scripts used for the Zabbix server (Without the trailing slash).
 scriptLocation='/opt/zabbix'
 
 
@@ -45,28 +49,25 @@ declare -ir installDefault
 declare -r zbxVers
 declare -r scriptLocation
 
-# ## Distribution: ubuntu, debian, raspbian.
-osDist=$(lsb_release -i | awk '{print $3}')
-declare -r osDist
+# ## Supported distribution: ubuntu, debian, raspbian.
+osDistribution=$(lsb_release -i | awk '{print $3}')
+declare -r osDistribution
 
-# ## Supported version.
-# ## Ubuntu: focal, bionic, trusty.
-# ## Debian: bulleye, buster, jessie, stretch.
-# ## Raspbian: buster, stretch.
-osVers=$(lsb_release -c | awk '{print $2}')
-declare -r osVers
+# ## Version of supported distributions.
+# ## Ubuntu: 20.04, 22.04, 24.04
+# ## Debian: 11, 12
+# ## Raspbian: 11, 12
+osRelease=$(lsb_release -r | awk '{print $2}')
+declare -r osRelease
+
 
 # ## Check PHP installed version.
 phpVers=$(apt-cache policy php | grep Candidate | awk -F ":" '{print $3}' | awk -F "+" '{print $1}')
 declare -r phpVers
 
-# ## Zabbix Agent installation script URL (unused).
-urlZbxAgent='https://github.com/cybiohub/svc_zabbixagent/archive/refs/heads/master.zip'
-declare -r urlZbxAgent
-
 # ## LAMP installation script URL (unused).
-urlLAMP='https://github.com/cybiohub/svc_lamp/archive/refs/heads/master.zip'
-declare -r urlLAMP
+#urlLAMP='https://github.com/cybiohub/svc_lamp/archive/refs/heads/master.zip'
+#declare -r urlLAMP
 
 
 #############################################################################################
@@ -116,18 +117,10 @@ fi
 
 # ## Added Zabbix repository.
 function zxRepo {
- if [ ! -f '/etc/apt/sources.list.d/zabbix.list' ]; then
-   echo -e "# ## Zabbix ${zbxVers} Repository" > /etc/apt/sources.list.d/zabbix.list
-   echo -e "deb https://repo.zabbix.com/zabbix/${zbxVers}/${osDist,,}/ ${osVers} main contrib non-free" >> /etc/apt/sources.list.d/zabbix.list
-   echo -e "deb-src https://repo.zabbix.com/zabbix/${zbxVers}/${osDist,,}/ ${osVers} main contrib non-free" >> /etc/apt/sources.list.d/zabbix.list
+   wget -q -O zabbix-release_${zbxVers}.deb https://repo.zabbix.com/zabbix/"${zbxVers}"/"${osDistribution,,}"/pool/main/z/zabbix-release/zabbix-release_latest+"${osDistribution,,}${osRelease}"_all.deb
+   dpkg -i zabbix-release_${zbxVers}.deb
 
-   # ## Wrong method...
-   apt-key adv --keyserver hkps://keyserver.ubuntu.com --recv-keys 082AB56BA14FE591
-   apt-key export A14FE591 | sudo gpg --dearmour -o /etc/apt/trusted.gpg.d/zabbix.gpg
    apt-get update
- else
-   echo -e 'INFO: Source file already exist!'
- fi
 }
 
 # ## 
@@ -135,33 +128,35 @@ function zx_base_check {
  checkPackage apache2
  sapache="${dependency}"
 
- #checkPackage php"${phpVers}"
- #sphp="${dependency}"
-
- #checkPackage mysql-server
- #smysql="${dependency}"
-
-
  # ## Check if LAMP services are installed.
  if [ "${sapache}" -eq 0 ]; then
    dlPath='/root/download'
 
-   if [ ! -d "${dlPath}" ]; then
-     mkdir "${dlPath}"
+   # ## Notification and exit if LAMP is not already installed.
+   echo -n -e "\n\n\n\e[31;1;208mWARNING: Missing Apache, PHP or MySQL server. Please install these dependancies. Press 'y' to download Cybionet LAMP installer, or any other key to exit:\e[0m.\n\n"
+   read -r ANSWER
+   if [ "${ANSWER,,}" = "y" ]; then
+
+     if [ ! -d "${dlPath}" ]; then
+       mkdir "${dlPath}"
+     fi
+
+     cd "${dlPath}" || echo 'ERROR: An unexpected error has occurred.'
+     wget -t 1 -T 5 https://github.com/cybiohub/svc_lamp/archive/refs/heads/main.zip -O svc_lamp.zip || rm -f svc_lamp.zip
+
+     if [ -f svc_lamp.zip ]; then
+       unzip svc_lamp.zip   
+       chmod 500 vx_lamp.sh
+     else
+         echo -e "\e[31;1;208mERROR: svc_lamp.zip not found.\e[0m"
+     fi
+
+     echo -e "You will find the Cybionet LAMP installer vx_lamp.s in the ${dlPath} directory."
+     echo -e "Install LAMP and run this script again."
+     exit 0
    fi
-
-   cd "${dlPath}" || echo 'ERROR: An unexpected error has occurred.'
-   wget -t 1 -T 5 https://github.com/cybiohub/svc_lamp/archive/refs/heads/main.zip -O svc_lamp.zip || rm -f svc_lamp.zip
-
-   if [ -f svc_lamp.zip ]; then
-     unzip svc_lamp.zip   
-     chmod 500 vx_lamp.sh
-   else
-     echo -e "\e[31;1;208mERROR: svc_lamp.zip not found.\e[0m"
-   fi
-
-   # ## Warning and exit if LAMP is not installed.
-   echo -n -e "\n\n\n\e[31;1;208mWARNING: Missing Apache, PHP or MySQL server. Please install these dependancies\e[0m.\n\n"
+ else
+   echo "Install LAMP and run this script again."
    exit 0
  fi
 }
@@ -181,39 +176,58 @@ function checkPackage() {
 
 # ## Basic packages.
 function zx_base {
- # ## Packages needed for basic script in Zabbix Server.
+
+ # ## ###########
+ # ## Packages needed for command available from Zabbix Frondend in the main dashboard.
+ 
+ # ## Dashboard & Item - Ping.
  apt-get -y install fping
+ apt-get -y install fping6
+
+ # ## Dashboard - Detect operationg system.
  apt-get -y install nmap
+
+ # ## Dashboard - Traceroute.
  apt-get -y install traceroute
 
- # ## --with-ssh2
+ 
+ # ## ###########
+ # ## Packages required for Zabbix Server functionality.
+ 
+ # ## Item - SSH Agent [--with-ssh2].
  apt-get -y install openssh-server
  apt-get -y install libssh2-1-dev
  apt-get -y install libcurl4-openssl-dev
 
- # ## --with-openipmi
+ # ## Item - IPMI Agent [--with-openipmi]
  apt-get -y install openipmi libopenipmi-dev libopenipmi0
  
- # ## --with-net-snmp
+ # ## Item - SNMP Agent [--with-net-snmp].
  apt-get -y install snmpd snmp
  apt-get -y install libsnmp-dev
- apt-get -y install snmp-mibs-downloader # ## Not supported on Debian.
+ 
+ # ## Simple check, because package is not supported by Debian.
+ if [ ! "${osDistribution}" == 'Debian' ]; then
+   apt-get -y install snmp-mibs-downloader
+ fi
 
  apt-get -y install libiksemel-dev
  apt-get -y install libpq-dev
 
- # ## --with-ldap
- apt-get -y install libldap2-dev
-
- # ## --with-java
+ # ## Item - JMX Agent [--with-java].
  apt-get -y install openjdk-9-jdk # ## openjdk-8-jdk on Debian.
 
- # ## --with--unixodbc
+ # ## Item - Database Monitor [--with--unixodbc]
  apt-get -y install unixodbc unixodbc-dev unixodbc-bin
+
+ # ## Authentication - LDAP [--with-ldap].
+ apt-get -y install libldap2-dev
 
  # ## --with--jabber
  # apt-get -y install ejabberd
 
+
+ # ## ###########
  # ## Dependencies required for the Zabbix server.
  apt-get -y install libiksemel3 libltdl7
  apt-get -y install odbc-postgresql tdsodbc libodbc1
@@ -252,23 +266,13 @@ function zxFrontend {
 ## # A TERMINER !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 function zx_frontend_tls {
  mkdir /etc/ssl/zabbix/
- sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -out /etc/ssl/zabbix/zabbix.crt -keyout /etc/ssl/zabbix/zabbix.key
-}
-
-# ## Installing the Zabbix Agent.
-function zx_agent {
- apt-get install -y zabbix-agent
+ openssl req -x509 -nodes -days 365 -newkey rsa:2048 -out /etc/ssl/zabbix/zabbix.crt -keyout /etc/ssl/zabbix/zabbix.key
 }
 
 # ## Installing Zabbix tools (Included in Zabbix Agent 4.x and more from Zabbix Repo).
 function zxTools {
  apt-get install -y zabbix-get
  apt-get install -y zabbix-sender
-}
-
-# ## Installation of the Java gateway.
-function zx_javagw {
- apt-get install -y zabbix-java-gateway
 }
 
 # ## MySQL database (Installed with the vx_lamp.sh script).
@@ -347,17 +351,6 @@ zx_user
 # ## Restart the Apache service.
 systemctl restart apache2.service
 
-# ## MySQL database (Unused: Installed with vx_lamp.sh).
-# zx_mysql
-
-# ##############
-# ## EXTRA
-
-# ## Installing the Zabbix Agent.
-#zx_agent
-
-# ## Installation of the Java gateway.
-#zx_javagw
 
 # ## Installing Zabbix tools (Included in Zabbix Agent 4.x and more from Zabbix Repo).
 if [ "${installDefault}" -eq 1 ]; then
