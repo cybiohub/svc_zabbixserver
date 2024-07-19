@@ -5,12 +5,12 @@
 # * Author:           	(c) 2004-2024  Cybionet - Ugly Codes Division
 # *
 # * File:               vx_zbxserver.sh
-# * Version:            0.1.16
+# * Version:            0.1.17
 # *
 # * Description:        Zabbix Server LTS installation script under Ubuntu LTS Server.
 # *
 # * Creation: October 03, 2014
-# * Change:   July 12, 2024
+# * Change:   July 18, 2024
 # *
 # ****************************************************************************
 # * This script deploys the Zabbix server (MySQL) as well as its frontend.
@@ -65,9 +65,9 @@ declare -r osRelease
 phpVers=$(apt-cache policy php | grep Candidate | awk -F ":" '{print $3}' | awk -F "+" '{print $1}')
 declare -r phpVers
 
-# ## LAMP installation script URL (unused).
-#urlLAMP='https://github.com/cybiohub/svc_lamp/archive/refs/heads/master.zip'
-#declare -r urlLAMP
+# ## LAMP installation script URL.
+urlLAMP='https://github.com/cybiohub/svc_lamp/archive/refs/heads/master.zip'
+declare -r urlLAMP
 
 
 #############################################################################################
@@ -142,11 +142,10 @@ function zx_base_check {
      fi
 
      cd "${dlPath}" || echo 'ERROR: An unexpected error has occurred.'
-     wget -t 1 -T 5 https://github.com/cybiohub/svc_lamp/archive/refs/heads/main.zip -O svc_lamp.zip || rm -f svc_lamp.zip
+     wget -t 1 -T 5 "${urlLAMP}" -O svc_lamp.zip || rm -f svc_lamp.zip
 
      if [ -f svc_lamp.zip ]; then
        unzip svc_lamp.zip   
-       chmod 500 vx_lamp.sh
      else
          echo -e "\e[31;1;208mERROR: svc_lamp.zip not found.\e[0m"
      fi
@@ -163,12 +162,12 @@ function zx_base_check {
 
 # ## Checks for the presence of the package.
 function checkPackage() {
- REQUIRED_PKG="${1}"
- if ! dpkg-query -s "${REQUIRED_PKG}" > /dev/null 2>&1; then
-   dependency=0
- else
-   dependency=1
- fi
+ REQUIRED_PKG="${1}"
+ if dpkg-query -W -f='${Status}' "${REQUIRED_PKG}" | grep -q "install ok installed"; then
+   dependency=1
+ else
+   dependency=0
+ fi
 }
 
 
@@ -254,6 +253,11 @@ function zxServerConfig {
 # ## Installing the Zabbix interface.
 function zxFrontend {
  apt-get -y install zabbix-frontend-php
+ 
+ if [ "${zbxVers}" = '7.0' ]; then
+   apt-get install -y zabbix-sql-scripts
+ fi 
+
  apt-get -y install php"${phpVers}"-bcmath php"${phpVers}"-mbstring php"${phpVers}"-gd
 
  if [ -f '/etc/apache2/conf-available/zabbix-frontend-php.conf' ]; then

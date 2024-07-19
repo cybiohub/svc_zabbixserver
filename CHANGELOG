@@ -1,3 +1,9 @@
+v0.1.17 - 2024-07-18
+## Fixed
+  - Checking for the presence of the apache2 package.
+  - Added installation of zabbix-sql-scripts package needed for Zabbix 7.0.
+
+
 v0.1.16 - 2024-07-12
 ## Fixed
   - Fixed the process of adding the Zabbix repo.
