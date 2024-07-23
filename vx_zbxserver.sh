@@ -79,7 +79,7 @@ if [ "${isConfigured}" == 'false' ] ; then
   exit 0
 fi
 
-# ## Check if the script are running under root user.
+# ## Check if the script are running with sudo or under root user.
 if [ "${EUID}" -ne 0 ]; then
   echo -n -e "\n\n\n\e[38;5;208mWARNING:This script must be run with sudo or as root.\e[0m"
   exit 0
@@ -128,46 +128,49 @@ function zx_base_check {
  checkPackage apache2
  sapache="${dependency}"
 
- # ## Check if LAMP services are installed.
+ # ## Check if LAMP services are installed [0 missing , 1 installed].
  if [ "${sapache}" -eq 0 ]; then
    dlPath='/root/download'
 
    # ## Notification and exit if LAMP is not already installed.
-   echo -n -e "\n\n\n\e[31;1;208mWARNING: Missing Apache, PHP or MySQL server. Please install these dependancies. Press 'y' to download Cybionet LAMP installer, or any other key to exit:\e[0m.\n\n"
+   echo -n -e "\n\e[31;1;208mWARNING: Missing Apache, PHP or MySQL server. Please install these dependancies. Press 'y' to download Cybionet LAMP installer, or any other key to exit: \e[0m"
    read -r ANSWER
    if [ "${ANSWER,,}" = "y" ]; then
 
      if [ ! -d "${dlPath}" ]; then
-       mkdir "${dlPath}"
+       mkdir "${dlPath}" || echo 'ERROR: An unexpected error has occurred.'
      fi
 
      cd "${dlPath}" || echo 'ERROR: An unexpected error has occurred.'
-     wget -t 1 -T 5 "${urlLAMP}" -O svc_lamp.zip || rm -f svc_lamp.zip
+     echo -e "Downloading LAMP installation script in progress..."
+     wget -t 1 -T 5 --quiet "${urlLAMP}" -O svc_lamp.zip || rm -f svc_lamp.zip
 
      if [ -f svc_lamp.zip ]; then
-       unzip svc_lamp.zip   
+       echo -e "Extracting files for installation."
+       unzip -q svc_lamp.zip || echo 'ERROR: An unexpected error has occurred.'
      else
          echo -e "\e[31;1;208mERROR: svc_lamp.zip not found.\e[0m"
      fi
 
-     echo -e "You will find the Cybionet LAMP installer vx_lamp.s in the ${dlPath} directory."
+     echo -e "You will find the Cybionet LAMP installer 'vx_lamp.sh' in the ${dlPath} directory."
      echo -e "Install LAMP and run this script again."
      exit 0
    fi
  else
-   echo "Install LAMP and run this script again."
-   exit 0
+   echo "Ready to process installation."
  fi
 }
 
 # ## Checks for the presence of the package.
 function checkPackage() {
- REQUIRED_PKG="${1}"
- if dpkg-query -W -f='${Status}' "${REQUIRED_PKG}" | grep -q "install ok installed"; then
-   dependency=1
- else
-   dependency=0
- fi
+ REQUIRED_PKG="${1}"
+ if dpkg-query -W -f='${Status}' "${REQUIRED_PKG}" | grep -q "install ok installed"; then
+   # ## Present LAMP.
+   dependency=1
+ else
+   # ## Missing LAMP.
+   dependency=0
+ fi
 }
 
 
@@ -244,7 +247,7 @@ function zxServerConfig {
    mv /etc/zabbix/zabbix_server.conf /etc/zabbix/zabbix_server.conf.ori
  fi
 
- cp configs/zabbix_server.conf /etc/zabbix/
+ cp configs/server/zabbix_server.conf /etc/zabbix/
 }
 
 
@@ -262,6 +265,9 @@ function zxFrontend {
 
  if [ -f '/etc/apache2/conf-available/zabbix-frontend-php.conf' ]; then
    a2enconf zabbix-frontend-php.conf
+ else
+   cp configs/frontend/zabbix-frontend-php.conf /etc/apache2/sites-available/
+   echo "An example Apache configuration has been copied to '/etc/apache2/sites-available/'."
  fi
 
  systemctl reload apache2
@@ -288,7 +294,7 @@ function zx_mysql {
 # ## Creating the Zabbix service user.
 function zx_user {
  useradd -d /home/zabbix -s /bin/bash -c 'Zabbix Server' -m zabbix
- echo -n -e "\nZabbix user password. \n\n"
+ echo -n -e "\n\n\nZabbix user password. \n\n"
  passwd
 
  echo 'zabbix ALL=(ALL) NOPASSWD:/usr/bin/nmap' >> /etc/sudoers.d/zabbix
